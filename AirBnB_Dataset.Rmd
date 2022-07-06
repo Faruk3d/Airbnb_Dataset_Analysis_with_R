@@ -1,0 +1,241 @@
+---
+title: "AirBNB_Dataset"
+author: "-"
+date: "18/03/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+-------------------------------
+AIRBNB PROJECT START FROM HERE
+-------------------------------
+
+Load the data
+```{r}
+originaldata = load('E:/DSTI/Big_Data_with_R/Final_exam/AirBnB.Rdata')
+mydata = as.data.frame(L)
+freq_data = as.data.frame(R)
+```
+
+Importing librarys
+```{r}
+library(ggplot2)
+library(maps)
+library(leaflet)
+library(dplyr)
+library(zoo)
+library(tidyr)
+#install.packages('plyr')
+library('plyr')
+```
+
+select the column that i will need for this project with dplyr library and %>% function
+```{r}
+apartdata <- mydata %>%
+  select(id,host_id,host_name,host_identity_verified,
+         zipcode,latitude,longitude,property_type,
+         room_type,accommodates,bathrooms,bedrooms,beds,
+         bed_type,price,guests_included,neighbourhood_cleansed)
+dim(apartdata)
+```
+
+
+check how many type of apartment in dataset and how many missing value on this columns
+```{r}
+unique(apartdata$property_type)
+sum(is.na(apartdata$property_type))
+
+```
+converting price column to number (delete $), then find how many missing value in this column
+```{r}
+apartdata$price <- as.numeric(gsub('\\$','',apartdata$price))
+summary(apartdata$price)
+sum(is.na(apartdata$price))
+```
+
+there is 49 missing value, not much, i prefer to replace them with mean value of column. i use 'zoo' library
+```{r}
+apartdata$price <- na.aggregate(apartdata$price)
+sum(is.na(apartdata$price))
+```
+
+```{r}
+summary(apartdata$price)
+```
+let's use bar plot to show apartment type
+```{r}
+ggplot(data = apartdata) + geom_bar(aes(x=apartdata$property_type))+ theme(axis.text.x = element_text(angle = 45))
+```
+We can see that the vast majority of the houses are apartments, and although it is clear at a glance, this data is not enough to satisfy my assessment of the price.So I need to use more data for reference.
+
+
+I wanted to see how many apartments were rented through airbnb in each district and it showed a lot of wrong data by zip code partition, I will work on this later.
+```{r}
+ggplot(data = apartdata) + geom_bar(aes(x=apartdata$zipcode)) + theme(axis.text.x = element_text(angle = 90))
+```
+I would like to see the connection between the price and the apartment information. First I need to see the missing data.
+```{r}
+sum(is.na(apartdata$beds))
+sum(is.na(apartdata$room_type))
+sum(is.na(apartdata$bedrooms))
+sum(is.na(apartdata$bathrooms))
+```
+not much missing value, i cannot calculate a mean value for these type of data so i decided to delete them from database
+```{r}
+apartdata <- apartdata %>% drop_na(beds, bedrooms, bathrooms)
+```
+
+no missing values
+```{r}
+sum(is.na(apartdata$beds))
+sum(is.na(apartdata$room_type))
+sum(is.na(apartdata$bedrooms))
+sum(is.na(apartdata$bathrooms))
+```
+Here i use histogram to show some apartment information
+```{r}
+hist(apartdata$beds, main = "Number of Beds", xlab = 'beds')
+hist(apartdata$bedrooms, main = "Number of Bedrooms", xlab = 'Bedrooms')
+hist(apartdata$bathrooms, main = "Number of Bathrooms", xlab = 'Bathrooms')
+```
+The number of three types of rooms is shown here
+```{r}
+barplot(table(apartdata$room_type))
+```
+As you can see from this data, most of the apartments for rent are priced at $100 or less.
+```{r}
+hist(apartdata$price)
+```
+Initially, I planned to analyze the prices by user ratings, but there were too many missing data in several ratings data, which exceeded 1/3 of the total data, so I did not calculate to use the user ratings data.
+```{r}
+sum(is.na(mydata$review_scores_rating))
+sum(is.na(mydata$review_scores_value))
+sum(is.na(mydata$review_scores_location))
+sum(is.na(mydata$review_scores_accuracy))
+```
+Then it occurred to me that the location of the apartment and the neighborhood would also be elements that would affect the price, so I performed the following steps.
+```{r}
+levels(apartdata$neighbourhood_cleansed)
+sum(is.na(apartdata$neighbourhood_cleansed))
+table(apartdata$neighbourhood_cleansed)
+```
+I tried a little to show a result by the number of beds with the price, but it didn't work well and I needed to prepare more data, so I left this part for later.
+```{r}
+plot(apartdata$beds,apartdata$price)
+```
+
+I used the following code to find out the number of apartments held by each owner. Some apartment owners hide personal information or do not collect information about the owner of the apartment.Since they are not missing data, I keep them.
+The data is more than 9000 rows, it is too crowded to display with graph, so I show the result by the following table:
+```{r}
+total_apart = count(apartdata, 'host_name')
+head(total_apart, 10)
+```
+Now let's see what data is available in the database for the region
+```{r}
+unique(apartdata$zipcode)
+sum(is.na(apartdata$zipcode))
+```
+
+The database contains data with incorrectly filled in area codes and data outside of Paris
+```{r}
+zip_data =  count(apartdata, 'zipcode')
+head(zip_data, 10)
+```
+I chose to use only data from Paris, so I filtered the data from Paris by the following code
+```{r}
+paris_data = apartdata[apartdata$zipcode %in% c('75001', '75002', '75003', '75004', '75005', '75006', '75007', '75008'
+                                       , '75009', '75010', '75011', '75012', '75013', '75014', '75015', '75016'
+                                       , '75017', '75018', '75019', '75020'), ]
+```
+
+
+Then use the count function to calculate how much apartment in each zone
+```{r}
+apart_per_quar = count(paris_data, 'zipcode')
+apart_per_quar
+```
+
+```{r}
+#plot(apart_per_quar$zipcode, apart_per_quar$freq)
+ggplot(data = apart_per_quar, aes(x=zipcode, y=freq,)) + geom_jitter()+ xlab('arrondissements') + ylab('apartments') + theme(axis.text.x = element_text(angle = 45))
+```
+I have used the code below to show the price of renting an apartment in each district of Paris, which is calculated by the number of beds in the apartment
+```{r}
+ggplot(data = paris_data) +
+  geom_point(aes(x=price , y = beds, col=zipcode)) +
+  facet_wrap( ~ zipcode, nrow = 2) + theme(axis.text.x = element_text(angle = 90))
+```
+
+
+The average apartment renting price for each quarter in Paris was then calculated from the data derived above
+```{r}
+aggregate(paris_data$price, by=list(paris_data$zipcode), FUN=mean)
+```
+
+Now let's go to the second table and first check for any missing data
+```{r}
+sum(is.na(freq_data$date))
+sum(is.na(freq_data$listing_id))
+```
+
+Then i count the number of times each apartment is rented. I changed the column names in the new table to make it easier to make connections with other tables
+```{r}
+freq_per_quar = count(freq_data, 'listing_id')
+names(freq_per_quar)[1] <- 'id'
+names(freq_per_quar)[2] <- 'visit_freq'
+head(freq_per_quar, 10)
+```
+inner join with 'paris_data' dataframe
+```{r}
+per_time_freq = merge(paris_data, freq_per_quar, by='id')
+```
+
+join 'paris_data' to 'freq_data' (this one is table R in AirBnB.Rdata)
+```{r}
+names(freq_data)[1] <- 'id'
+new_data = merge(paris_data, freq_data, by='id', all=TRUE)
+```
+
+I extracted the "year" from the date and created a new column by following two steps
+```{r}
+date_formatted <- as.Date(new_data$date, format = "%Y-%m-%d")
+class(date_formatted)
+```
+```{r}
+new_data$year <- format(date_formatted, "%Y")
+```
+
+Then I calculated the number of apartment rentals per year
+```{r}
+year_count = count(new_data, 'year')
+year_count
+
+```
+It can be seen that the number of users renting through airbnb in Paris has been increasing rapidly since 2011, but this trend has been decreasing since 2015
+```{r}
+plot(year_count$year, year_count$freq, type = 'l')
+```
+Visit frequency of the different quarters according to time with graph
+```{r}
+quar_count = count(new_data, c("year", "zipcode"))
+head(quar_count, 10)
+```
+```{r}
+ggplot(quar_count, aes(x = zipcode, y= freq, color = year)) + geom_jitter() + xlab('arrondissements') +
+  ylab('Visit_frequency') + theme(axis.text.x = element_text(angle = 45))
+```
+The map created by leaflet makes it easy to see all the areas of Paris that are available for rent through airbnb
+```{r}
+leaflet(data = paris_data) %>% 
+  addTiles() %>% 
+  addMarkers(lng = ~longitude,
+             lat = ~latitude, 
+             popup = ~price, 
+             clusterOptions = markerClusterOptions())
+```
+
